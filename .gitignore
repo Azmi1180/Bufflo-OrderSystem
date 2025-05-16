@@ -13,6 +13,7 @@ xcuserdata/
 *.dSYM.zip
 *.dSYM
 
+SupabaseConfig.plist
 .env
 
 ## Playgrounds

@@ -7,13 +7,6 @@
 
 import SwiftUI
 
-struct MenuItem: Identifiable {
-    let id = UUID()
-    let name: String
-    let price: Double
-    let image: String
-}
-
 struct CustomerOrderView: View {    
     private let menuItems: [MenuItem] = [
         MenuItem(name: "Nasi Putih", price: 4000, image: "white_rice_image"),
