@@ -6,30 +6,38 @@
 //
 
 import Foundation
-import SwiftData
+import FirebaseFirestore
 
-
-struct OrderItem: Identifiable {
-    let id = UUID()
-    let name: String
-    var quantity: Int
-    let price: Double
+// Represents an item on the menu
+struct MenuItemFS: Identifiable, Codable {
+    @DocumentID var id: String? // This now comes from FirebaseFirestore
+    var name: String
+    var price: Double
+    var image: String
 }
 
-struct Order: Identifiable {
-    let id = UUID()
-    let orderNumber: String
-    let items: [OrderItem]
-    let status: OrderStatus
-    
-    enum OrderStatus {
-        case pending
-        case processing
-        case completed
-        case cancelled
-    }
-        
-    var totalPrice: Double {
-        items.reduce(0) { $0 + ($1.price * Double($1.quantity)) }
+// Represents an item within an order
+struct OrderItemFS: Identifiable, Codable {
+    var id = UUID().uuidString
+    var name: String
+    var quantity: Int
+    var price: Double
+}
+
+// Represents a customer's order
+struct OrderFS: Identifiable, Codable {
+    @DocumentID var id: String? // This now comes from FirebaseFirestore
+    var orderNumber: String
+    var items: [OrderItemFS]
+    var status: OrderStatusFS
+    var totalPrice: Double
+    var userId: String?
+    var orderDate: Timestamp // This comes from FirebaseFirestore
+
+    enum OrderStatusFS: String, Codable, CaseIterable {
+        case pending = "Pending"
+        case processing = "Processing"
+        case completed = "Completed"
+        case cancelled = "Cancelled"
     }
 }

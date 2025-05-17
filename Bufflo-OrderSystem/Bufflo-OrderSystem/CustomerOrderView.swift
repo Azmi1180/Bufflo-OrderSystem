@@ -7,28 +7,10 @@
 
 import SwiftUI
 
-struct MenuItem: Identifiable {
-    let id = UUID()
-    let name: String
-    let price: Double
-    let image: String
-}
+struct CustomerOrderView: View {
+    @EnvironmentObject var menuViewModel: MenuViewModel
+    @EnvironmentObject var customerOrderViewModel: CustomerOrderViewModel
 
-struct CustomerOrderView: View {    
-    private let menuItems: [MenuItem] = [
-        MenuItem(name: "Nasi Putih", price: 4000, image: "white_rice_image"),
-        MenuItem(name: "Ayam Goreng", price: 12000, image: "ayam_goreng_image"),
-        MenuItem(name: "Tahu Goreng", price: 2000, image: "tahu_goreng_image"),
-        MenuItem(name: "Ayam Bakar", price: 12000, image: "ayam_bakar_image"),
-        MenuItem(name: "Ayam Gulai", price: 12000, image: "ayam_gulai_image"),
-        MenuItem(name: "Tempe Orek", price: 4000, image: "tempe_orek_image"),
-        MenuItem(name: "Sayur Toge", price: 4000, image: "sayur_toge_image"),
-        MenuItem(name: "Sayur Pare Teri", price: 4000, image: "tumis_pare_teri_image")
-    ]
-        
-    @State private var orderItems: [OrderItem] = []
-    @State private var orderNumber: String = "001"
-    
     var body: some View {
         ZStack {
             Color(UIColor.systemGray6).ignoresSafeArea()
@@ -40,7 +22,14 @@ struct CustomerOrderView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal)
                         .padding(.top)
-                                        
+
+                    // Button to add sample data (for testing, remove in production)
+//                     Button("Add Sample Menu Items to Firebase") {
+//                         menuViewModel.addSampleMenuItems()
+//                     }
+//                     .padding()
+
+
                     ScrollView {
                         LazyVGrid(columns: [
                             GridItem(.flexible()),
@@ -48,25 +37,29 @@ struct CustomerOrderView: View {
                             GridItem(.flexible()),
                             GridItem(.flexible())
                         ], spacing: 16) {
-                            ForEach(menuItems) { item in
-                                MenuItemView(item: item, addToOrder: addItemToOrder)
+                            ForEach(menuViewModel.menuItems) { item in // Use menuItems from ViewModel
+                                MenuItemViewFS(item: item, addToOrder: { menuItem in
+                                    customerOrderViewModel.addItemToOrder(menuItem: menuItem)
+                                })
                             }
                         }
                         .padding()
                     }
                 }
                 .frame(width: 700)
-                
+
                 VStack {
                     HStack {
                         Spacer()
-                        OrderListView(
-                            orderItems: $orderItems,
-                            orderNumber: orderNumber,
-                            removeItem: removeItemFromOrder,
-                            placeOrder: placeOrder
+                        OrderListViewFS(
+                            orderItems: $customerOrderViewModel.currentOrderItems,
+                            displayOrderNumber: customerOrderViewModel.currentDisplayOrderNumber,
+                            removeItem: { item in
+                                customerOrderViewModel.decrementOrRemoveOrderItem(item: item)
+                            },
+                            placeOrder: customerOrderViewModel.placeOrder
                         )
-                        .frame(width: .infinity)
+                        .frame(maxWidth: .infinity)
                         .background(Color.white)
                         .cornerRadius(10)
                         .shadow(radius: 3)
@@ -75,63 +68,22 @@ struct CustomerOrderView: View {
                     Spacer()
                 }
             }
-            
         }
-    }
-        
-    private func addItemToOrder(item: MenuItem) {
-        if let index = orderItems.firstIndex(where: { $0.name == item.name }) {
-            let currentItem = orderItems[index]
-            let updatedItem = OrderItem(
-                name: currentItem.name,
-                quantity: currentItem.quantity + 1,
-                price: currentItem.price
-            )
-            orderItems[index] = updatedItem
-        } else {
-            orderItems.append(OrderItem(
-                name: item.name,
-                quantity: 1,
-                price: item.price
-            ))
-        }
-    }
-        
-    private func removeItemFromOrder(at indexSet: IndexSet) {
-        for index in indexSet {
-            if orderItems[index].quantity > 1 {
-                orderItems[index].quantity -=  1
-            } else {
-                orderItems.remove(at: index)
-            }
-        }
-    }
-
-        
-    private func placeOrder() {
-        let order = Order(
-            orderNumber: "No. \(orderNumber)",
-            items: orderItems,
-            status: .pending
-        )
-    
-        print("Order placed: \(order.orderNumber), Total: Rp. \(Int(order.totalPrice))")
-        
-        orderItems = []
-                
-        let orderNum = Int(orderNumber) ?? 0
-        orderNumber = String(format: "%03d", orderNum + 1)
+        // .onAppear { // Data is fetched by ViewModel's init
+        //     menuViewModel.fetchMenuItems()
+        // }
     }
 }
 
-struct MenuItemView: View {
-    let item: MenuItem
-    let addToOrder: (MenuItem) -> Void
-    
+// Updated MenuItemView to use MenuItemFS
+struct MenuItemViewFS: View {
+    let item: MenuItemFS // Use Firebase model
+    let addToOrder: (MenuItemFS) -> Void
+
     var body: some View {
         VStack {
             VStack{
-                Image(item.image)
+                Image(item.image) // Ensure these images are in your Assets.xcassets
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: 144, height: 144)
@@ -142,7 +94,7 @@ struct MenuItemView: View {
                     Text(item.name)
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    
+
                     Text("Rp. \(Int(item.price))")
                         .font(.caption)
                         .foregroundColor(.secondary)
@@ -160,23 +112,32 @@ struct MenuItemView: View {
 }
 
 
-// Order list panel
-struct OrderListView: View {
-    @Binding var orderItems: [OrderItem]
-    let orderNumber: String
-    let removeItem: (IndexSet) -> Void
-    let placeOrder: () -> Void
-    
+// Updated OrderListView to use OrderItemFS and ViewModel interaction
+struct OrderListViewFS: View {
+    @Binding var orderItems: [OrderItemFS]
+    // orderNumber now comes from CustomerOrderViewModel's currentDisplayOrderNumber
+    let displayOrderNumber: String // Renamed from orderNumber
+    let removeItem: (OrderItemFS) -> Void
+    // Update placeOrder signature to match the new ViewModel
+    let placeOrder: (@escaping (Bool, String?, Error?) -> Void) -> Void
+
+    @State private var showingPlaceOrderConfirmAlert = false
+    @State private var showingOrderSuccessAlert = false
+    @State private var orderSuccessMessage: String = ""
+    @State private var showingOrderErrorAlert = false
+    @State private var orderErrorAlertMessage: String = ""
+
+
     private var total: Double {
         orderItems.reduce(0) { $0 + ($1.price * Double($1.quantity)) }
     }
-    
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Order List No. \(orderNumber)")
-                .font(.headline)
-                .padding(.vertical, 8)
-            
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Order List (Next No. \(displayOrderNumber))") // Use displayOrderNumber
+                    .font(.headline)
+                    .padding(.vertical, 8)
+
             if orderItems.isEmpty {
                 Text("No items added")
                     .foregroundColor(.secondary)
@@ -184,24 +145,15 @@ struct OrderListView: View {
                     .padding(.vertical)
             } else {
                 List {
-                    ForEach(Array(orderItems.enumerated()), id: \.element.id) { index, item in
+                    ForEach(orderItems) { item in
                         HStack {
-                            Text("\(item.quantity)x")
-                                .foregroundColor(.secondary)
-                                .frame(width: 30, alignment: .leading)
-
-                            Text(item.name)
-
-                            Spacer()
-
-                            Text("Rp. \(Int(item.price * Double(item.quantity)))")
-                                .foregroundColor(.primary)
-
-                            Button(action: {
-                                removeItem(IndexSet(integer: index))
-                            }) {
-                                Image(systemName: "x.circle")
-                                    .foregroundColor(.red)                                    
+                            Text("\(item.quantity)x") // ...
+                            Text(item.name) // ...
+                            Spacer() // ...
+                            Text("Rp. \(Int(item.price * Double(item.quantity)))") // ...
+                            Button(action: { removeItem(item) }) { // ...
+                                Image(systemName: "x.circle") // ...
+                                    .foregroundColor(.red)
                             }
                             .buttonStyle(BorderlessButtonStyle())
                         }
@@ -209,21 +161,22 @@ struct OrderListView: View {
                 }
                 .frame(height: min(CGFloat(orderItems.count) * 44 + 20, 300))
                 .listStyle(PlainListStyle())
-                
+
                 Divider()
-                
+
                 HStack {
                     Text("Total :")
                         .font(.headline)
-                    
                     Spacer()
-                    
                     Text("Rp. \(Int(total))")
                         .font(.headline)
                 }
                 .padding(.vertical, 4)
-                
-                Button(action: placeOrder) {
+
+                Button(action: {
+                    // Trigger the confirmation alert
+                    self.showingPlaceOrderConfirmAlert = true
+                }) {
                     Text("Order")
                         .font(.headline)
                         .foregroundColor(.white)
@@ -233,6 +186,34 @@ struct OrderListView: View {
                         .cornerRadius(8)
                 }
                 .disabled(orderItems.isEmpty)
+                .alert("Confirm Order", isPresented: $showingPlaceOrderConfirmAlert) {
+                    Button("Cancel", role: .cancel) { }
+                    Button("Confirm") {
+                        placeOrder { success, placedOrderNumber, error in // Capture placedOrderNumber
+                            if success, let orderNum = placedOrderNumber {
+                                self.orderSuccessMessage = "Your order (No. \(orderNum)) has been successfully placed."
+                                self.showingOrderSuccessAlert = true
+                            } else {
+                                self.orderErrorAlertMessage = error?.localizedDescription ?? "An unknown error occurred while placing the order."
+                                self.showingOrderErrorAlert = true
+                            }
+                        }
+                    }
+                } message: {
+                    Text("Are you sure you want to place this order for Rp. \(Int(total))?")
+                }
+                .alert("Order Placed!", isPresented: $showingOrderSuccessAlert) { // Success Alert
+                    Button("OK", role: .cancel) { }
+                } message: {
+                    Text(orderSuccessMessage) // Use dynamic success message
+                }
+                // Error Alert
+                .alert("Order Failed", isPresented: $showingOrderErrorAlert) {
+                    Button("OK", role: .cancel) { }
+                } message: {
+                    Text(orderErrorAlertMessage)
+                }
+
             }
         }
         .padding()
@@ -241,6 +222,9 @@ struct OrderListView: View {
 
 struct CustomerOrderView_Previews: PreviewProvider {
     static var previews: some View {
+        // For preview, you might need to mock the environment objects
         CustomerOrderView()
+            .environmentObject(MenuViewModel())
+            .environmentObject(CustomerOrderViewModel())
     }
 }
