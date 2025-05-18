@@ -11,8 +11,7 @@ import SwiftUI
 
 @main
 struct Bufflo_OrderSystemApp: App {
-    // Register app delegate for Firebase setup
-    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate // Add this line
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
 
     @StateObject var menuViewModel = MenuViewModel()
     @StateObject var customerOrderViewModel = CustomerOrderViewModel()
@@ -40,6 +39,10 @@ struct MainAppView: View {
             OrderManagementView()
                 .tabItem {
                     Label("Manage Orders", systemImage: "list.bullet.clipboard")
+                }
+            SalesRecapView()
+                .tabItem {
+                    Label("Sales Recap", systemImage: "list.bullet.clipboard")
                 }
         }
     }
